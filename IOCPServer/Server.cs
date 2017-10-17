@@ -344,7 +344,7 @@ namespace IOCPServer
                 Log4Debug(String.Format("客户 {0} 断开连接! 剩余 {1} 个连接", s.RemoteEndPoint.ToString(), r));
 #endif
                 if (s.Connected)
-                    s.Shutdown(SocketShutdown.Send);
+                    s.Shutdown(SocketShutdown.Both);
             }
             finally
             {

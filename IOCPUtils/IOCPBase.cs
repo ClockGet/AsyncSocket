@@ -107,6 +107,8 @@ namespace IOCPUtils
             }
             finally
             {
+                userToken.ReceiveArgs.SendPacketsElements = null;
+                userToken.ReceiveArgs.SendPacketsFlags = TransmitFileOptions.UseDefaultWorkerThread;
                 RecycleToken(userToken);
             }
             
@@ -158,7 +160,7 @@ namespace IOCPUtils
                     ProcessSend(e, result);
                     break;
                 case SocketAsyncOperation.SendPackets:
-                    
+                    ProcessSendPackets(e, result);
                     break;
                 default:
                     throw new ArgumentException("The last operation completed on the socket was not a receive or send");

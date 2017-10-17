@@ -65,7 +65,7 @@ namespace IOCPClient
 
         #region Properties
 
-        private bool Connected
+        public bool Connected
         {
             get
             {
@@ -187,6 +187,7 @@ namespace IOCPClient
             userToken.ConnectSocket = _clientSocket;
             userToken.ReceiveArgs.RemoteEndPoint = _remoteEndPoint;
             userToken.TimeOut = timeOut;
+            userToken.ReceiveArgs.SetBuffer(userToken.ReceiveArgs.Offset, 0);
             return _clientSocket.ConnectAsync(this, userToken)
             .ContinueWith(t =>
             {
@@ -222,7 +223,7 @@ namespace IOCPClient
             }
             if(socket!=null && socket.Connected)
             {
-                socket.Shutdown(SocketShutdown.Send);
+                socket.Shutdown(SocketShutdown.Both);
             }
             if (socket != null)
             {
@@ -235,7 +236,7 @@ namespace IOCPClient
         {
             if(_clientSocket!=null && _clientSocket.Connected)
             {
-                _clientSocket.Shutdown(SocketShutdown.Send);
+                _clientSocket.Shutdown(SocketShutdown.Both);
             }
             if(_clientSocket!=null)
             {

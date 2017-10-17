@@ -79,6 +79,7 @@ namespace IOCPUtils
             if (token.ReceiveArgs.Buffer == this.m_buffer)
             {
                 Array.Clear(this.m_buffer, token.ReceiveArgs.Offset, m_bufferSize);
+                token.ReceiveArgs.SetBuffer(token.ReceiveArgs.Offset, m_bufferSize);
             }
         }
     }
