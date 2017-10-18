@@ -1,5 +1,7 @@
 ﻿using IOCPUtils;
 using System;
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -11,6 +13,9 @@ namespace IOCPServer
     public class Server : IOCPBase,IDisposable
     {
         const int opsToPreAlloc = 2;
+        const int _waitResource = 0;
+        const int _accepting = 1;
+        const int _accepted = 2;
         #region Fields
 
         /// <summary>  
@@ -37,10 +42,16 @@ namespace IOCPServer
         /// 发送和接收超时
         /// </summary>
         private int _timeOut = 120;
+
+        /// <summary>
+        /// 队列排队超时
+        /// </summary>
+        private int _acceptTimeOut = 30 * 1000;
+
         /// <summary>  
         /// 信号量  
         /// </summary>  
-        private Semaphore _maxAcceptedClients;
+        private SemaphoreSlim _maxAcceptedClients;
 
         /// <summary>  
         /// 缓冲区管理  
@@ -51,6 +62,16 @@ namespace IOCPServer
         /// 对象池  
         /// </summary>  
         private UserTokenPool _objectPool;
+
+        /// <summary>
+        /// 已连接Socket集合
+        /// </summary>
+        private ConcurrentDictionary<IntPtr, Socket> _connectedSockets;
+
+        /// <summary>
+        /// 监听socket状态
+        /// </summary>
+        private int _state;
 
         #endregion
 
@@ -148,7 +169,9 @@ namespace IOCPServer
 
             _objectPool = new UserTokenPool();
 
-            _maxAcceptedClients = new Semaphore(_maxClient, _maxClient);
+            _maxAcceptedClients = new SemaphoreSlim(_maxClient, _maxClient);
+
+            _connectedSockets = new ConcurrentDictionary<IntPtr, Socket>(DefaultConcurrencyLevel, _maxClient);
         }
 
         #endregion
@@ -225,8 +248,31 @@ namespace IOCPServer
             if (IsRunning)
             {
                 IsRunning = false;
+                if(_state==_accepting)
+                {
+                    try
+                    {
+                        _maxAcceptedClients.Release();
+                    }
+                    catch(SemaphoreFullException)
+                    {
+
+                    }
+                }
                 _serverSock.Close();
                 _objectPool.Clear();
+                SpinWait spinWait = default(SpinWait);
+                do
+                {
+                    spinWait.SpinOnce();
+                    var sockets = _connectedSockets.Values.ToArray();
+                    for(int i=0;i<sockets.Length;i++)
+                    {
+                        CloseClientSocket(sockets[i]);
+                    }
+                }
+                while (_maxAcceptedClients.CurrentCount < _maxClient);
+                _connectedSockets.Clear();
             }
         }
 
@@ -235,6 +281,8 @@ namespace IOCPServer
         #region Accept
         private void StartAccept(SocketAsyncEventArgs asyniar)
         {
+            if (!IsRunning)
+                return;
             if (asyniar == null)
             {
                 asyniar = new SocketAsyncEventArgs();
@@ -245,7 +293,17 @@ namespace IOCPServer
                 //socket must be cleared since the context object is being reused
                 asyniar.AcceptSocket = null;
             }
-            _maxAcceptedClients.WaitOne();
+            Interlocked.Exchange(ref _state, _waitResource);
+            if(!_maxAcceptedClients.Wait(_acceptTimeOut))
+            {
+                RaiseOnErrored(new Exception(string.Format("获取可用连接资源超时，总资源数：{0}",_maxClient)));
+                Task.Run(() => 
+                {
+                    StartAccept(asyniar);
+                });
+                return;
+            }
+            Interlocked.Exchange(ref _state, _accepting);
             if (!_serverSock.AcceptAsync(asyniar))
             {
                 ProcessAccept(asyniar);
@@ -259,6 +317,7 @@ namespace IOCPServer
 
         private void ProcessAccept(SocketAsyncEventArgs e)
         {
+            Interlocked.Exchange(ref _state, _accepted);
             if (e.SocketError == SocketError.Success)
             {
                 Socket s = e.AcceptSocket;
@@ -270,6 +329,7 @@ namespace IOCPServer
                         UserToken token = _objectPool.Pop();
                         token.ConnectSocket = s;
                         SetSocketOptions(s);
+                        _connectedSockets.TryAdd(s.Handle, s);
 #if DEBUG
                         Log4Debug(String.Format("客户 {0} 连入, 共有 {1} 个连接。", s.RemoteEndPoint.ToString(), _clientCount));
 #endif
@@ -331,6 +391,20 @@ namespace IOCPServer
 
         #endregion
 
+        #region Disconnect
+        public override Task<SocketResult> DisconnectAsync(Socket socket, int timeOut = -1)
+        {
+            if (socket == null || !socket.Connected)
+                return Task.FromResult(SocketResult.NotSocket);
+            var userToken = _objectPool.Pop();
+            userToken.ConnectSocket = socket;
+            userToken.TimeOut = timeOut;
+            userToken.ReceiveArgs.SetBuffer(userToken.ReceiveArgs.Offset, 0);
+            return socket.DisconnectAsync(this, userToken);
+        }
+
+        #endregion
+
         #endregion
 
         #region Close
@@ -339,18 +413,28 @@ namespace IOCPServer
         {
             try
             {
+                if (s.IsDisposed())
+                    return;
                 int r = Interlocked.Decrement(ref _clientCount);
+                Socket temp;
+                _connectedSockets.TryRemove(s.Handle, out temp);
+                temp = null;
 #if DEBUG
                 Log4Debug(String.Format("客户 {0} 断开连接! 剩余 {1} 个连接", s.RemoteEndPoint.ToString(), r));
 #endif
                 if (s.Connected)
                     s.Shutdown(SocketShutdown.Both);
+                _maxAcceptedClients.Release();
+            }
+            catch(SemaphoreFullException)
+            {
+
             }
             finally
             {
                 s.Close();
             }
-            _maxAcceptedClients.Release();
+            
         }
 
         protected override void RecycleToken(UserToken token)
