@@ -47,6 +47,10 @@ namespace IOCPClient
 
         private const int _connected = 2;
 
+        private const int _disconnecting = 3;
+
+        private const int _disconnected = 4;
+
         private const int _closed = 5;
         /// <summary>  
         /// 缓冲区管理  
@@ -206,6 +210,32 @@ namespace IOCPClient
 
         #endregion
 
+        #region Disconnect
+
+        public override Task<SocketResult> DisconnectAsync(Socket socket, int timeOut = -1)
+        {
+            int origin = Interlocked.Exchange(ref _state, _disconnecting);
+            if (origin != _connected)
+            {
+                throw new InvalidOperationException("This tcp socket client is in invalid state when disconnecting.");
+            }
+            var userToken = _objectPool.Pop();
+            userToken.ConnectSocket = socket;
+            userToken.TimeOut = timeOut;
+            userToken.ReceiveArgs.SetBuffer(userToken.ReceiveArgs.Offset, 0);
+            return socket.DisconnectAsync(this, userToken)
+                .ContinueWith(t =>
+                {
+                    if(Interlocked.CompareExchange(ref _state, _disconnected,_disconnecting)!=_disconnecting)
+                    {
+                        throw new InvalidOperationException("This tcp socket client is in invalid state when disconnected");
+                    }
+                    return t.Result;
+                }, TaskContinuationOptions.ExecuteSynchronously);
+        }
+
+        #endregion
+
         #endregion
 
         #region Close
@@ -221,6 +251,8 @@ namespace IOCPClient
                 CleanClientSocket();
                 return;
             }
+            if (socket.IsDisposed())
+                return;
             if(socket!=null && socket.Connected)
             {
                 socket.Shutdown(SocketShutdown.Both);
