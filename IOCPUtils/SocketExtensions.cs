@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq.Expressions;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 
@@ -6,6 +7,19 @@ namespace IOCPUtils
 {
     public static class SocketExtensions
     {
+        private static Func<Socket, bool> checkIfDisposed;
+        static SocketExtensions()
+        {
+            var type = typeof(Socket);
+            var propertyInfo = type.GetProperty("CleanedUp", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var p = Expression.Parameter(type, "socket");
+            var body=Expression.Property(p, propertyInfo);
+            checkIfDisposed = Expression.Lambda<Func<Socket, bool>>(body, p).Compile();
+        }
+        public static bool IsDisposed(this Socket socket)
+        {
+            return checkIfDisposed(socket);
+        }
         public static Task<SocketResult> ConnectAsync(this Socket socket, IOCPBase iocpBase, UserToken userToken)
         {
             var task = userToken.CompletionSource;
@@ -13,6 +27,16 @@ namespace IOCPUtils
             {
                 SocketResult result = new SocketResult { SocketError = userToken.ReceiveArgs.SocketError, Args = userToken.ReceiveArgs };
                 iocpBase.ProcessConnect(userToken.ReceiveArgs, result);
+            }
+            return task;
+        }
+        public static Task<SocketResult> DisconnectAsync(this Socket socket, IOCPBase iocpBase, UserToken userToken)
+        {
+            var task = userToken.CompletionSource;
+            if(!socket.DisconnectAsync(userToken.ReceiveArgs))
+            {
+                SocketResult result = new SocketResult { SocketError = userToken.ReceiveArgs.SocketError, Args = userToken.ReceiveArgs };
+                iocpBase.ProcessDisconnect(userToken.ReceiveArgs, result);
             }
             return task;
         }

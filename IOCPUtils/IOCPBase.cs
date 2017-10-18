@@ -11,6 +11,13 @@ namespace IOCPUtils
     {
         #region Properties
         public abstract int BufferSize { get; protected set; }
+        protected internal int DefaultConcurrencyLevel
+        {
+            get
+            {
+                return 4 * PlatformHelper.ProcessorCount;
+            }
+        }
         #endregion
 
         #region Set Socket Options
@@ -34,6 +41,27 @@ namespace IOCPUtils
                 userToken.SetResult(result);
             }
             catch(Exception ex)
+            {
+                userToken.SetException(ex);
+            }
+            finally
+            {
+                RecycleToken(userToken);
+            }
+        }
+
+        #endregion
+
+        #region Disconnect
+
+        protected internal void ProcessDisconnect(SocketAsyncEventArgs e, SocketResult result)
+        {
+            var userToken = e.UserToken as UserToken;
+            try
+            {
+                userToken.SetResult(result);
+            }
+            catch (Exception ex)
             {
                 userToken.SetException(ex);
             }
@@ -142,6 +170,12 @@ namespace IOCPUtils
 
         #endregion
 
+        #region Async Disconnect
+
+        public abstract Task<SocketResult> DisconnectAsync(Socket socket, int timeOut = -1);
+
+        #endregion
+
         #endregion
 
         #region Callback
@@ -161,6 +195,9 @@ namespace IOCPUtils
                     break;
                 case SocketAsyncOperation.SendPackets:
                     ProcessSendPackets(e, result);
+                    break;
+                case SocketAsyncOperation.Disconnect:
+                    ProcessDisconnect(e, result);
                     break;
                 default:
                     throw new ArgumentException("The last operation completed on the socket was not a receive or send");

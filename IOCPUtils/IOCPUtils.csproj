@@ -43,6 +43,7 @@
     <Compile Include="BufferManager.cs" />
     <Compile Include="Handler.cs" />
     <Compile Include="IOCPBase.cs" />
+    <Compile Include="PlatformHelper.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SocketResult.cs" />
     <Compile Include="UserTokenPool.cs" />
