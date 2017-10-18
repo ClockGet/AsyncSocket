@@ -45,6 +45,7 @@ namespace ConsoleTestClient
                         break;
                     }
                     Console.WriteLine("接收到的数据为：" + client.Encoding.GetString(result.Data));
+                    await client.SendAsync(client.ConnectSocket, client.Encoding.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")));
                 }
                 catch(Exception ex)
                 {

@@ -17,6 +17,8 @@ namespace ConsoleTestServer
             server.Start(Server_OnAccepted);
             Console.WriteLine("服务器已经启动...");
             Console.ReadKey();
+            server.Stop();
+            Console.WriteLine("服务器已经关闭...");
         }
 
         private static async Task Server_OnErrored(Exception ex, params object[] args)
@@ -32,8 +34,15 @@ namespace ConsoleTestServer
                 {
                     SocketResult result = await server.SendAsync(socket, Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff")));
                     
-                    Console.WriteLine(result.SocketError);
+                    Console.WriteLine("send result:"+result.SocketError);
                     if(result.SocketError!=System.Net.Sockets.SocketError.Success)
+                    {
+                        server.CloseClientSocket(socket);
+                        return;
+                    }
+                    result = await server.ReceiveAsync(socket);
+                    Console.WriteLine("receive result:" + result.SocketError);
+                    if (result.SocketError != System.Net.Sockets.SocketError.Success)
                     {
                         server.CloseClientSocket(socket);
                         return;
