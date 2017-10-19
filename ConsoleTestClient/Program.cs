@@ -1,6 +1,7 @@
 ﻿using IOCPClient;
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -18,7 +19,9 @@ namespace ConsoleTestClient
         }
         static async Task Test()
         {
-            Client client = new Client(new IPEndPoint(IPAddress.Loopback, 8088));
+            IPAddress addr = IPAddress.Parse(ConfigurationManager.AppSettings["remoteAddr"]);
+            int port = int.Parse(ConfigurationManager.AppSettings["remotePort"]);
+            Client client = new Client(new IPEndPoint(addr, port));
             while(true)
             {
                 try

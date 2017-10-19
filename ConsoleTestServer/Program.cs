@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using IOCPServer;
 using IOCPUtils;
+using System.Configuration;
 
 namespace ConsoleTestServer
 {
@@ -12,7 +13,8 @@ namespace ConsoleTestServer
     {
         static void Main(string[] args)
         {
-            Server server = new Server(8088, 50);
+            int port = int.Parse( ConfigurationManager.AppSettings["port"]);
+            Server server = new Server(port, 50);
             server.OnAccpetErrored += Server_OnErrored;
             server.Start(Server_OnAccepted);
             Console.WriteLine("服务器已经启动...");
