@@ -326,8 +326,6 @@ namespace IOCPServer
                     try
                     {
                         Interlocked.Increment(ref _clientCount);
-                        UserToken token = _objectPool.Pop();
-                        token.ConnectSocket = s;
                         SetSocketOptions(s);
                         _connectedSockets.TryAdd(s.Handle, s);
 #if DEBUG
