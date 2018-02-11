@@ -1,2 +1,2 @@
 # SimpleIOCPServer
-A simple I/O Completion Port Server and Client, use the Task-based Asynchronous Pattern with Async and Await.
+A simple async Socket Server and Client using I/O Completion Port, use the Task-based Asynchronous Pattern with Async and Await.
