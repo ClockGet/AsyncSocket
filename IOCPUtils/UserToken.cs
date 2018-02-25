@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace IOCPUtils
@@ -8,17 +9,14 @@ namespace IOCPUtils
     {
         private Socket connectSocket;
         private TaskCompletionSource<SocketResult> completionSource;
-        private System.Timers.Timer timer = null;
+        private Timer timer = null;
         public UserToken()
         {
             completionSource = new TaskCompletionSource<SocketResult>();
-            timer = new System.Timers.Timer();
-            timer.AutoReset = false;
-            timer.Enabled = false;
-            timer.Elapsed += Timer_Elapsed;
+            timer = new Timer(Timer_Elapsed, null, Timeout.Infinite, Timeout.Infinite);
         }
 
-        private void Timer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
+        private void Timer_Elapsed(object state)
         {
 #if DEBUG
             Console.WriteLine("Timer_Elapsed fired");
@@ -54,8 +52,7 @@ namespace IOCPUtils
                 ResetTask();
                 if (TimeOut > 0)
                 {
-                    timer.Interval = TimeOut;
-                    timer.Enabled = true;
+                    timer.Change(TimeOut, Timeout.Infinite);
                 }
 #if DEBUG
                 Console.WriteLine($"return a UserToken: {Id}, TaskID: {completionSource.Task.Id}");
@@ -70,7 +67,7 @@ namespace IOCPUtils
             if (completionSource.Task.IsCompleted)
                 return;
             completionSource.SetResult(result);
-            timer.Enabled = false;
+            timer.Change(Timeout.Infinite, Timeout.Infinite);
 #if DEBUG
             Console.WriteLine($"UserToken SetResult: {Id} TaskID: {completionSource.Task.Id}");
 #endif
@@ -80,7 +77,7 @@ namespace IOCPUtils
             if (completionSource.Task.IsCompleted)
                 return;
             completionSource.SetResult(SocketResult.NotSocket);
-            timer.Enabled = false;
+            timer.Change(Timeout.Infinite, Timeout.Infinite);
 #if DEBUG
             Console.WriteLine($"UserToken SetException: {Id} TaskID: {completionSource.Task.Id}");
 #endif
@@ -90,7 +87,7 @@ namespace IOCPUtils
             if (completionSource.Task.IsCompleted)
                 return;
             completionSource.SetResult(SocketResult.NotSocket);
-            timer.Enabled = false;
+            timer.Change(Timeout.Infinite, Timeout.Infinite);
 #if DEBUG
             Console.WriteLine($"UserToken SetCanceled: {Id} TaskID: {completionSource.Task.Id}");
 #endif
